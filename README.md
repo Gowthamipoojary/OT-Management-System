@@ -60,13 +60,3 @@ B.Tech in Computer Science and Engineering
 ⭐ Conclusion
 
 The OT Management System is a practical and scalable solution for managing employee overtime. It not only simplifies the process but also ensures accuracy, transparency, and compliance with company policies. This project reflects strong understanding of backend development, database design, and real-world application development.
-
-✅ This version is:
-
-✔️ Clean and professional
-✔️ Easy to understand
-✔️ Perfect for GitHub + interview
-
-If you want, next I can:
-👉 Make a short 2-minute explanation for interview
-👉 Or add screenshots section (very important for GitHub projects)
