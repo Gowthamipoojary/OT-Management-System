@@ -1,7 +1,7 @@
 const sql = require('mssql/msnodesqlv8')
 // ✅ Database configuration
 const config = {
-    server: 'INMAL00027\\EMILGET',  
+    server: 'Your_server_name',  
     database: 'OTManagementDB',   
     driver: 'msnodesqlv8',
     options: {
