@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Monthly OT Summary</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="container">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <h2>OT System</h2>
+    <a href="index">OT Entry</a>
+    <a href="employee">Employee Management</a>
+    <a href="otsummary">OT Summary</a>
+    <a href="monthlysummary" class="active">Weekly/Monthly Summary</a>
+    <a href="hraproval" id="hrLink">HR Approval</a>
+
+  </div>
+  <!-- MAIN -->
+  <div class="main">
+    <!-- HEADER -->
+    <div class="header">
+      <h1>Weekly/Monthly OT Summary</h1>
+    </div>
+    <!-- CARD -->
+    <div class="card">
+      <form class="monthly-summary-form" id="monthlyForm">
+        <!-- FILTERS -->
+              <div class="form-group">
+          <label>Department</label>
+          <select id="department">
+            <option value="">All Department</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Employee</label>
+          <select id="employee" >
+            <option value="">All Employee</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+  <label>Summary Type</label>
+  <select id="summaryType">
+    <option value="monthly">Monthly</option>
+    <option value="weekly">Weekly</option>
+  </select>
+</div>
+        <div class="form-group">
+          <label>From Date</label>
+          <input type="date" id="fromDate">
+        </div>
+        <div class="form-group">
+          <label>To Date</label>
+          <input type="date" id="toDate" >
+        </div>
+        <!-- ACTIONS -->
+        <div class="form-actions">
+          <button type="submit">Show Summary</button>
+          <button type="button" id="exportBtn" class="btn-secondary">Export Excel</button>
+        </div>
+        <!-- RESULT TABLE -->
+      </form>
+    </div>
+  <div class="card">
+    <div class="table-container-no-scroll">
+
+  <table id="detailsTableMonthly">
+          <thead>
+            <tr>
+              <th>Employee ID</th>
+              <th>Employee Name</th>
+              <th>Department</th>
+              <th>Month</th>
+              <th>Total OT Hours</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Data will be inserted here -->
+          </tbody>
+        </table>
+        </div>
+  </div>
+  </div>
+</div>
+<script>
+
+/* ===============================
+   LOAD DEPARTMENTS ON PAGE LOAD
+================================ */
+
+
+async function loadDepartments() {
+  try {
+    const res = await fetch("/api/departments");
+    const data = await res.json();
+
+    const deptSelect = document.getElementById("department");
+    deptSelect.innerHTML = `<option value="">All Department</option>`;
+    data.forEach(d => {
+      const option = document.createElement("option");
+      option.value = d.DeptID;
+      option.textContent = d.DeptName;
+      deptSelect.appendChild(option);
+    });
+  } catch (err) {
+    console.error("Error loading departments", err);
+  }
+}
+
+loadDepartments();
+
+/* ===============================
+   LOAD EMPLOYEES ON DEPT CHANGE
+================================== */
+
+document.getElementById("department").addEventListener("change", async function () {
+  const deptId = this.value;
+  const empSelect = document.getElementById("employee");
+
+  empSelect.innerHTML = `<option value="">All Employee</option>`;
+
+  // If All Department selected → do NOT load employees
+  if (!deptId) return;
+
+  try {
+    const res = await fetch(`/api/employee/all/${deptId}`);
+    const data = await res.json();
+
+    data.forEach(e => {
+      const option = document.createElement("option");
+      option.value = e.EmpID;
+      option.textContent = `${e.EmpID} - ${e.EmpName}`;
+      empSelect.appendChild(option);
+    });
+  } catch (err) {
+    console.error("Error loading employees", err);
+  }
+});
+
+/* ===============================
+   MONTHLY SUMMARY FORM SUBMIT
+================================ */
+
+document.getElementById("monthlyForm").addEventListener("submit", async function (e) {
+  e.preventDefault();
+
+  const fromDate = document.getElementById("fromDate").value;
+  const toDate = document.getElementById("toDate").value;
+  const summaryType = document.getElementById("summaryType").value;
+
+  const deptId = document.getElementById("department").value || null;
+  const empId = document.getElementById("employee").value || null;
+
+  if (!fromDate || !toDate) {
+    alert("Please select From Date and To Date");
+    return;
+  }
+
+  // ✅ WEEKLY VALIDATION (Mon → Sun only)
+
+  if (summaryType === "weekly") {
+    const from = new Date(fromDate);
+    const to = new Date(toDate);
+    const diffDays = (to - from) / (1000 * 60 * 60 * 24);
+
+    if (from.getDay() !== 1 || to.getDay() !== 0 || diffDays !== 6) {
+      alert("For Weekly summary, select Monday to Sunday only (7 days).");
+      return;
+    }
+  }
+
+  // ✅ Decide API based on summary type
+
+  const apiUrl =
+    summaryType === "weekly"
+      ? "/api/ot/weekly-summary"
+      : "/api/ot/monthly-summary";
+
+  try {
+    const response = await fetch(apiUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fromDate, toDate, deptId, empId })
+    });
+
+    const data = await response.json();
+
+    if (summaryType === "weekly") {
+      renderWeeklyTable(data);
+    } else {
+      renderMonthlyTable(data);
+    }
+
+  } catch (err) {
+    console.error(err);
+    alert("Failed to load summary");
+  }
+});
+/* ===============================
+   RENDER MONTHLY TABLE
+================================ */
+function renderMonthlyTable(data) {
+  const tbody = document.querySelector("#detailsTableMonthly tbody");
+const thead = document.querySelector("#detailsTableMonthly thead");
+
+
+  // ✅ RESET MONTHLY TABLE HEADER
+  thead.innerHTML = `
+    <tr>
+      <th>Employee ID</th>
+      <th>Employee Name</th>
+      <th>Department</th>
+      <th>Month</th>
+      <th>Total OT Hours</th>
+    </tr>
+  `;
+
+  tbody.innerHTML = "";
+
+  if (!data || data.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="5" style="text-align:center;">No data found</td>
+      </tr>
+    `;
+    return;
+  }
+
+  data.forEach(row => {
+    const tr = document.createElement("tr");
+
+    // 🔴 Monthly OT limit highlight (48 hrs)
+    if (row.TotalHours >= 48) {
+      tr.style.backgroundColor = "#ffcccc";
+      tr.style.color = "red";
+      tr.title = "OT limit exceeded (48 hrs)";
+    }
+
+    tr.innerHTML = `
+      <td>${row.EmpID}</td>
+      <td>${row.EmpName}</td>
+      <td>${row.DeptName}</td>
+      <td>${row.Month}</td>
+      <td><strong>${row.TotalHours}</strong></td>
+    `;
+
+    tbody.appendChild(tr);
+  });
+}
+
+function renderWeeklyTable(data) {
+  const tbody = document.querySelector("#detailsTableMonthly tbody");
+  const thead = document.querySelector("#detailsTableMonthly thead");
+
+  // 🔄 Change table headers for weekly
+
+  thead.innerHTML = `
+    <tr>
+      <th>Employee ID</th>
+      <th>Employee Name</th>
+      <th>Department</th>
+      <th>Year</th>
+      <th>Week</th>
+      <th>Total OT Hours</th>
+    </tr>
+  `;
+
+  tbody.innerHTML = "";
+
+  if (!data || data.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="6" style="text-align:center;">No data found</td>
+      </tr>
+    `;
+    return;
+  }
+
+  data.forEach(row => {
+    const tr = document.createElement("tr");
+
+    // ⚠ Weekly OT limit highlight (12 hrs)
+
+    if (row.TotalHours >= 12) {
+      tr.style.backgroundColor = "#ffcccc";
+      tr.style.color = "red";
+      tr.title = "Weekly OT limit reached (12 hrs)";
+    }
+
+    tr.innerHTML = `
+      <td>${row.EmpID}</td>
+      <td>${row.EmpName}</td>
+      <td>${row.DeptName}</td>
+      <td>${row.Year}</td>
+      <td>Week ${row.WeekNo}</td>
+      <td><strong>${row.TotalHours}</strong></td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+
+
+/* ===============================
+   EXPORT TABLE TO EXCEL
+================================ */
+const exportBtn = document.getElementById("exportBtn");
+exportBtn.addEventListener("click", () => {
+  const fromDate = document.getElementById("fromDate").value;
+  const toDate = document.getElementById("toDate").value;
+  const deptId = document.getElementById("department").value;
+  const empId = document.getElementById("employee").value;
+  const summaryType = document.getElementById("summaryType").value;
+
+  if (!fromDate || !toDate) {
+    alert("Please select From Date and To Date");
+    return;
+  }
+  // 🔀 Decide export API
+  const exportUrl =
+    summaryType === "weekly"
+      ? "/api/ot/weekly-summary/export"
+      : "/api/ot/monthly-summary/export";
+
+  const params = new URLSearchParams({ fromDate, toDate });
+  if (deptId) params.append("deptId", deptId);
+  if (empId) params.append("empId", empId);
+
+  window.location.href = `${exportUrl}?${params.toString()}`;
+});
+
+
+fetch("/login/logged-user")
+  .then(res => res.json())
+  .then(user => {
+    if (user.department !== "HR") {
+      const hrLink = document.getElementById("hrLink");
+      if (hrLink) {
+        hrLink.style.pointerEvents = "none";
+        hrLink.style.opacity = "0.5";
+        hrLink.style.cursor = "not-allowed";
+        hrLink.title = "HR only";
+      }
+    }
+  });
+
+</script>
+</body>
+</html>
+

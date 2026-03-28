@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>OT Management System</title>
+  <link rel="stylesheet" href="login.css">
+</head>
+<body>
+<div class="login-page">
+  <div class="login-card">
+    <div class="brand-panel">
+      <h1>OT Management System</h1>
+    </div>
+    <div class="form-panel">
+      <h2>Welcome Back</h2>
+      <p class="subtitle">Please login to your account</p>
+      <p id="error-msg" class="error-msg"></p>
+      <div id="error-box" class="error-box" style="display:none;">
+  Invalid User Name or Password
+</div>
+        <form action="/login" method="POST">
+        <div class="input-box">
+          <input type="text"  name="emp_name" required>
+          <label>User name</label>
+        </div>
+        <div class="input-box">
+          <input type="password" name="password" required>
+          <label>Password</label>
+        </div>
+        <button type="submit">Login</button>
+      </form>
+    </div>
+  </div>
+</div>
+<script>
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("error")) {
+    document.getElementById("error-box").style.display = "block";
+    // Highlight inputs
+    document.querySelectorAll(".input-box input").forEach(input => {
+      input.classList.add("input-error");
+    });
+  }
+</script>
+</body>
+</html>

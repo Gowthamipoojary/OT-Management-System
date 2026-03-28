@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Employee Management</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+#hrTable {
+width: 100%;
+border-collapse: collapse;
+font-size: 14px;
+background-color: #ffffff;
+box-shadow: 0 6px 16px rgba(15, 23, 42, 0.08);
+border-radius: 8px;
+overflow: hidden;
+}
+
+/* Header */
+#hrTable th {
+background-color: #2c3e50;
+color: #ffffff;
+padding: 12px 14px;
+text-align: center;
+font-size: 13px;
+font-weight: 600;
+text-transform: uppercase;
+letter-spacing: 0.5px;
+border: 1px solid #e5e7eb;
+}
+/* Cells */
+#hrTable td {
+padding: 10px 12px;
+text-align: center;
+border: 1px solid #e5e7eb;
+vertical-align: middle;
+}
+/* Zebra rows */
+#hrTable tbody tr:nth-child(even) {
+background-color: #f8fafc;
+}
+/* Hover effect */
+#hrTable tbody tr:hover {
+background-color: #eef3f7;
+transition: 0.2s ease;
+}
+/* =========================
+TIME INPUT
+========================= */
+#hrTable input[type="text"] {
+width: 110px;
+padding: 6px 8px;
+border: 1px solid #cbd5e1;
+border-radius: 6px;
+text-align: center;
+font-size: 13px;
+background-color: #f8fafc;
+}
+#hrTable input[type="text"]:focus {
+outline: none;
+border-color: #3b82f6;
+background-color: #ffffff;
+box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+}
+/* =========================
+BUTTONS
+========================= */
+#hrTable button {
+padding: 7px 14px;
+border: none;
+cursor: pointer;
+border-radius: 6px;
+font-size: 12px;
+font-weight: 600;
+color: #ffffff;
+background: linear-gradient(135deg, #2563eb, #3b82f6); /* Blue */
+box-shadow: 0 3px 8px rgba(59, 130, 246, 0.35);
+transition: all 0.2s ease;
+}
+
+/* Hover effect */
+#hrTable button {
+transform: translateY(-1px);
+box-shadow: 0 6px 14px rgba(59, 130, 246, 0.45);
+}
+
+/* Click effect */
+#hrTable button {
+transform: translateY(0);
+box-shadow: 0 2px 5px rgba(59, 130, 246, 0.25);
+}
+  </style>
+</head>
+<body>
+<div class="container">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <h2>OT System</h2>
+    <a href="index">OT Entry</a>
+    <a href="employee" class="active">Employee Management</a>
+    <a href="otsummary">OT Summary</a>
+    <a href="monthlysummary">Weekly/Monthly Summary</a>
+    <a href="hraproval.html">HR Approval</a>
+  </div>
+  <div class="main">
+  <div class="header">
+    <h1>HR Approval</h1>
+  </div>
+    <table id="hrTable">
+      <thead>
+        <tr>
+          <th>Emp ID</th>
+          <th>Name</th>
+          <th>Department</th>
+          <th>Date</th>
+          <th>OT Hr</th>
+          <th>Shift</th>
+          <th>Given By</th>
+          <th>Reason</th>
+          <th>In Time</th>
+          <th>Out Time</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+async function loadPendingOT() {
+  const res = await fetch("/api/ot/hr/pending");
+  const data = await res.json();
+  const tbody = document.querySelector("#hrTable tbody");
+  tbody.innerHTML = "";
+
+  data.forEach(row => {
+    tbody.innerHTML += `
+      <tr>
+        <td>${row.EmpID}</td>
+        <td>${row.EmpName}</td>
+        <td>${row.DeptName}</td>
+        <td>${new Date(row.OTDate).toLocaleDateString()}</td>
+        <td>${row.OTHours}</td>
+        <td>${row.Shift}</td>
+        <td>${row.GivenBy}</td>
+        <td>${row.Reason}</td>
+        <td><input type="text" placeholder=" Start time" id="start_${row.ID}"></td>
+        <td><input type="text" placeholder=" End time" id="end_${row.ID}"></td>
+        <td>
+          <button onclick="approve(${row.ID})">Approve</button>
+        </td>
+      </tr>
+    `;
+  });
+}
+
+// Approve function
+async function approve(id) {
+  const startTime = document.getElementById(`start_${id}`).value.trim();
+  const endTime = document.getElementById(`end_${id}`).value.trim();
+
+  // ❌ Empty or only spaces
+  if (startTime === "" || endTime === "") {
+    alert("Start time and End time cannot be empty or spaces");
+    return;
+  }
+
+  await fetch(`/api/ot/hr/approve/${id}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ startTime, endTime })
+  });
+
+  alert("OT Approved");
+  loadPendingOT();
+}
+// Load data on page load
+loadPendingOT();
+</script>
+</body>
+</html>

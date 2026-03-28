@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>OT Summary</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="container">
+  <div class="sidebar">
+    <h2>OT System</h2>
+    <a href="index">OT Entry</a>
+    <a href="employee">Employee Management</a>
+    <a href="otsummary" class="active">OT Summary</a>
+    <a href="monthlysummary">Weekly/Monthly Summary</a>
+    <a href="hraproval" id="hrLink">HR Approval</a>
+  </div>
+  <div class="main">
+    <div class="header">
+      <h1>OT Summary</h1>
+    </div>
+    <!-- FILTER FORM -->
+    <div class="card">
+      <form id="summaryForm">
+        <div class="form-group">
+          <label>Department</label>
+          <select id="summaryDept">
+            <option value="">All Departments</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Employee</label>
+          <select id="summaryEmp">
+            <option value="">All Employees</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Date Range</label>
+          <div class="date-range">
+            <input type="date" id="fromDate">
+            <span>to</span>
+            <input type="date" id="toDate">
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="btn-primary">View OT</button>
+          <button type="button" class="btn-secondary" id="exportBtn">
+            Export Excel
+          </button>
+          <button type="button" class="btn-secondary" id="pdfBtn">
+  Export PDF
+</button>
+
+        </div>
+      </form>
+    </div>
+<!-- OT DETAILS TABLE -->
+<div class="card">
+   <div class="table-container">
+  <table id="detailsTable">
+    <thead>
+      <tr>
+        <th>Employee ID</th>
+        <th>Employee Name</th>
+        <th>Department</th>
+        <th>Date</th>
+        <th>Shift</th>
+        <th>OT Hr</th>
+        <th>Given By</th>
+        <th>Reason</th>
+        <th>Approved by</th>
+        <th>Approved Date</th>
+        <th>In Time</th>
+        <th>Out Time</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</div>
+</div>
+  </div>
+</div>
+<script>
+
+const deptSelect = document.getElementById("summaryDept");
+const empSelect = document.getElementById("summaryEmp");
+const form = document.getElementById("summaryForm");
+const tableBody = document.querySelector("#detailsTable tbody");
+const exportBtn = document.getElementById("exportBtn");
+function formatDateDDMMYYYY(dateStr) {
+  const date = new Date(dateStr);
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const year = date.getUTCFullYear();
+  return `${day}/${month}/${year}`;
+}
+
+
+/* =========================
+   LOAD DEPARTMENTS
+========================= */
+
+async function loadDepartments() {
+  const res = await fetch("/api/departments");
+  const departments = await res.json();
+  departments.forEach(d => {
+    deptSelect.add(new Option(d.DeptName, d.DeptID));
+  });
+}
+
+loadDepartments();
+/* =========================
+   LOAD EMPLOYEES
+========================= */
+deptSelect.addEventListener("change", async function () {
+  empSelect.innerHTML = '<option value="">All Employees</option>';
+  if (!this.value) return;
+
+  const res = await fetch(`/api/employee/all/${this.value}`);
+  const employees = await res.json();
+  employees.forEach(e => {
+  empSelect.add(
+    new Option(`${e.EmpID} - ${e.EmpName}`, e.EmpID)
+  );
+});
+});
+
+/* =========================
+   LOAD OT SUMMARY (DIRECT VIEW)
+========================= */
+
+form.addEventListener("submit", async function (e) {
+  e.preventDefault();
+  const fromDate = document.getElementById("fromDate").value;
+  const toDate = document.getElementById("toDate").value;
+  // ✅ Date validation
+  if (!fromDate || !toDate) {
+    alert("Please select both From Date and To Date");
+    return; // stop execution
+  }
+  const params = new URLSearchParams({
+    deptId: deptSelect.value,
+    empId: empSelect.value,
+    fromDate: fromDate,
+    toDate: toDate
+  });
+  const res = await fetch(`/api/ot/summary?${params}`);
+  const data = await res.json();
+  tableBody.innerHTML = "";
+  if (!data.records || data.records.length === 0) {
+    tableBody.innerHTML =
+      `<tr><td colspan="11">No OT records found</td></tr>`;
+    return;
+  }
+  data.records.forEach(r => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${r.EmpID}</td>
+      <td>${r.EmpName}</td>
+      <td>${r.DeptName}</td>
+      <td>${formatDateDDMMYYYY(r.OTDate)}</td>
+      <td>${r.Shift}</td>
+      <td>${r.OTHours}</td>
+      <td>${r.GivenBy}</td>
+      <td>${r.Reason}</td>
+      <td>${r.ApprovedBy || "-"}</td>
+      <td>${r.ApprovedDate ? formatDateDDMMYYYY(r.ApprovedDate) : "-"}</td>
+      <td>${r.InTime || "-"}</td>
+      <td>${r.OutTime || "-"}</td>
+    `;
+    tableBody.appendChild(tr);
+  });
+});
+
+exportBtn.addEventListener("click", function () {
+  const fromDate = document.getElementById("fromDate").value;
+  const toDate = document.getElementById("toDate").value;
+  if (!fromDate || !toDate) {
+    alert("Please select date range before exporting");
+    return;
+  }
+  const params = new URLSearchParams({
+    deptId: deptSelect.value,
+    empId: empSelect.value,
+    fromDate,
+    toDate
+  }).toString();
+
+  window.location.href = `/api/ot/summary/export?${params}`;
+});
+
+const pdfBtn = document.getElementById("pdfBtn");
+
+pdfBtn.addEventListener("click", function () {
+  const fromDate = document.getElementById("fromDate").value;
+  const toDate = document.getElementById("toDate").value;
+
+  if (!fromDate || !toDate) {
+    alert("Please select date range before exporting");
+    return;
+  }
+
+  const params = new URLSearchParams({
+    deptId: deptSelect.value,
+    empId: empSelect.value,
+    fromDate,
+    toDate
+  }).toString();
+
+  window.location.href = `/api/ot/summary/pdf?${params}`;
+});
+
+fetch("/login/logged-user")
+  .then(res => res.json())
+  .then(user => {
+    if (user.department !== "HR") {
+      const hrLink = document.getElementById("hrLink");
+      if (hrLink) {
+        hrLink.style.pointerEvents = "none";
+        hrLink.style.opacity = "0.5";
+        hrLink.style.cursor = "not-allowed";
+        hrLink.title = "HR only";
+      }
+    }
+  });
+
+</script>
+</body>
+</html>

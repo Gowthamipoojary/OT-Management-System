@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>OT Management System</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="container">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <h2>OT System</h2>
+    <a href="index" class="active">OT Entry</a>
+    <a href="employee">Employee Management</a>
+    <a href="otsummary">OT Summary</a>
+    <a href="monthlysummary">Weekly/Monthly Summary</a>
+    <a href="hraproval" id="hrLink">HR Approval</a>
+  </div>
+  <!-- MAIN -->
+  <div class="main">
+    <div class="header">
+      <h1>Employee OT Entry</h1>
+    </div>
+    <!-- CARD -->
+    <div class="card">
+      <form class="ot-entry-form" id="otForm">
+        <div class="form-group">
+          <label for="department">Department</label>
+          <select id="department" required>
+            <option value="">Select Department</option>
+          </select>
+        </div>
+        <div class="form-group">
+  <label for="empId">Employee ID</label>
+  <select id="empId" required>
+    <option value="">Select Employee ID</option>
+  </select>
+</div>
+      <div class="form-group">
+  <label for="employee">Employee Name</label>
+  <input
+    type="text"
+    id="employee"
+    readonly
+    placeholder="Employee name will auto-fill"
+  >
+</div>
+<div class="form-group">
+   <label for="date">Date</label>
+    <input type="date" id="date" required> </div>
+
+    <div class="form-group">
+  <label>Weekly OT Hours Left</label>
+  <input type="text" id="weeklyLeft" readonly placeholder="Auto calculated">
+</div>
+<div class="form-group">
+  <label>Monthly OT Hours Left</label>
+  <input type="text" id="monthlyLeft" readonly placeholder="Auto calculated">
+</div>
+        <div class="form-group">
+          <label for="shift">Shift</label>
+          <select id="shift" required>
+            <option value="">Select Shift</option>
+            <option>Shift1</option>
+            <option>Shift2</option>
+            <option>Shift3</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="hours">OT Hours</label>
+          <input
+  type="text"
+  id="hours"
+  placeholder="HH:MM (eg: 3:15)"
+  pattern="^([0-9]{1,2}):(00|05|10|15|20|25|30|35|40|45|55)$"
+  maxlength="5"
+  oninput="filterOTInput(this)"
+  required
+>     
+ </div>
+        <div class="form-group">
+  <label for="givenBy">Given By</label>
+  <input type="text" id="givenBy" readonly placeholder="Auto filled">
+</div>
+<div class="form-group">
+  <label for="reason">Reason</label>
+  <select id="reason" required>
+    <option value="">Select Reason</option>
+    <option value="High volume requirement">High Volume Requirement</option>
+    <option value="Reliever not reported">Reliever Not Reported</option>
+    <option value="High absenteeism">High Absenteeism</option>
+  </select>
+</div>
+        <div class="form-actions">
+          <button type="submit">Submit OT</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+<script>
+const departmentSelect = document.getElementById("department");
+const empIdSelect = document.getElementById("empId");     // NEW
+const employeeInput = document.getElementById("employee"); // NEW (input)
+const otForm = document.getElementById("otForm");
+
+async function setupLoggedUser() {
+  try {
+    const res = await fetch("/login/logged-user");
+    if (!res.ok) return;
+    const user = await res.json();
+   departmentSelect.innerHTML = `
+  <option value="${user.deptId}">
+    ${user.department}
+  </option>
+`;
+    departmentSelect.disabled = true;
+
+    // ✅ Auto-fill Given By
+    document.getElementById("givenBy").value = user.empName;
+
+    // ✅ Trigger employee load for this department
+    departmentSelect.dispatchEvent(new Event("change"));
+
+  } catch (err) {
+    console.error("Failed to load logged user", err);
+  }
+}
+
+setupLoggedUser();
+async function loadDepartments() {
+  try {
+    const res = await fetch("/api/departments");
+    const departments = await res.json();
+    departments.forEach(dept => {
+      const option = document.createElement("option");
+      option.value = dept.DeptID;
+      option.textContent = dept.DeptName;
+      departmentSelect.appendChild(option);
+    });
+  } catch (err) {
+    console.error("Error loading departments", err);
+    alert("Failed to load departments");
+  }
+}
+//loadDepartments();
+/* =========================
+   LOAD EMPLOYEES BY DEPT
+========================= */
+departmentSelect.addEventListener("change", async function () {
+  const deptId = this.value;
+  empIdSelect.innerHTML = '<option value="">Select Employee ID</option>';
+  employeeInput.value = "";
+  document.getElementById("weeklyLeft").value = "";
+  document.getElementById("monthlyLeft").value = "";
+  const weeklyInput = document.getElementById("weeklyLeft");
+  const monthlyInput = document.getElementById("monthlyLeft");
+    // 🔑 RESET WEEKLY & MONTHLY WARNING STYLES
+  document.getElementById("weeklyLeft").classList.remove("ot-limit-field");
+  document.getElementById("monthlyLeft").classList.remove("ot-limit-field");
+  weeklyInput.style.border = "";
+  monthlyInput.style.border = "";
+  const submitBtn = document.querySelector("button[type='submit']");
+  submitBtn.classList.add("btn-disabled")
+  submitBtn.title = "Select employee and date";
+  submitBtn.style.backgroundColor = "";
+  submitBtn.style.color = "";
+  submitBtn.style.cursor = "";
+  if (!deptId) return;
+  try {
+    const res = await fetch(`/api/employee/${deptId}`);
+    const employees = await res.json();
+    employees.forEach(emp => {
+      const option = document.createElement("option");
+      option.value = emp.EmpID;
+      option.textContent = emp.EmpID;
+      option.dataset.name = emp.EmpName;
+      empIdSelect.appendChild(option);
+    });
+  } catch (err) {
+    console.error("Error loading employees", err);
+    alert("Failed to load employees");
+  }
+});
+empIdSelect.addEventListener("change", function () {
+  const selectedOption = this.options[this.selectedIndex];
+  employeeInput.value = selectedOption?.dataset.name || "";
+  // clear old OT values first
+  document.getElementById("weeklyLeft").value = "";
+  document.getElementById("monthlyLeft").value = "";
+  calculateOTLeft();
+});
+/* =========================
+   HH:MM → DECIMAL
+========================= */
+function timeToDecimal(time) {
+  const regex = /^([0-9]{1,2}):(00|05|10|15|20|25|30|35|40|45|55)$/;
+  if (!regex.test(time)) {
+    alert("Enter OT in HH:MM format with minutes 00,10,15,30 or 45");
+    throw new Error("Invalid OT format");
+  }
+
+  const [hours, minutes] = time.split(":").map(Number);
+  return hours + (minutes / 60);
+}
+function filterOTInput(input) {
+  // Allow only digits and colon
+  input.value = input.value.replace(/[^0-9:]/g, "");
+
+  // Allow only one colon
+  const parts = input.value.split(":");
+  if (parts.length > 2) {
+    input.value = parts[0] + ":" + parts[1];
+  }
+}
+
+/* =========================
+   CHECK MONTHLY OT LIMIT
+========================= */
+async function checkMonthlyOTLimit(empId, otDate) {
+  try {
+    const res = await fetch(
+      `/api/ot/monthly-total?empId=${empId}&date=${otDate}`
+    );
+
+    if (!res.ok) throw new Error("Failed to check OT limit");
+
+    const data = await res.json();
+    // backend should return { totalHours: number }
+    return data.totalHours || 0;
+
+  } catch (err) {
+    console.error("OT limit check error", err);
+    alert("Unable to validate OT limit");
+    throw err;
+  }
+}
+
+
+/* =========================
+   CHECK WEEKLY OT LIMIT
+========================= */
+async function checkWeeklyOTLimit(empId, otDate) {
+  try {
+    const res = await fetch(
+      `/api/ot/weekly-total?empId=${empId}&date=${otDate}`
+    );
+
+    if (!res.ok) throw new Error("Failed weekly OT check");
+    const data = await res.json();
+    return data.totalHours || 0;
+
+  } catch (err) {
+    console.error("Weekly OT check error", err);
+    alert("Unable to validate weekly OT");
+    throw err;
+  }
+}
+
+
+function isCurrentMonth(dateString) {
+  if (!dateString) return false;
+
+  const selectedDate = new Date(dateString);
+  const today = new Date();
+
+  return (
+    selectedDate.getFullYear() === today.getFullYear() &&
+    selectedDate.getMonth() === today.getMonth()
+  );
+}
+
+function toggleFormForMonth(isCurrent) {
+  const submitBtn = document.querySelector("button[type='submit']");
+  const weeklyInput = document.getElementById("weeklyLeft");
+  const monthlyInput = document.getElementById("monthlyLeft");
+  const shift = document.getElementById("shift");
+  const hours = document.getElementById("hours");
+  const reason = document.getElementById("reason");
+  if (!isCurrent) {
+    // Disable fields
+    weeklyInput.value = "";
+    monthlyInput.value = "";
+    shift.disabled = true;
+    hours.disabled = true;
+    reason.disabled = true;
+    submitBtn.classList.add("btn-disabled")
+    // 🔴 Button style (Disabled)
+    submitBtn.style.backgroundColor = "#b0b0b0";
+    submitBtn.style.color = "#666";
+    submitBtn.style.cursor = "not-allowed";
+    submitBtn.title = "Only current month OT allowed";
+  } else {
+    // Enable fields
+    shift.disabled = false;
+    hours.disabled = false;
+    reason.disabled = false;
+    submitBtn.disabled = false;
+    submitBtn.title = "";
+    submitBtn.style.backgroundColor = "";
+    submitBtn.style.cursor = "";
+  }
+}
+
+async function calculateOTLeft() {
+  const empId = empIdSelect.value;
+  const otDate = document.getElementById("date").value;
+  const submitBtn = document.querySelector("button[type='submit']");
+
+  // 🔑 UPDATE BUTTON STATE EVEN HERE
+  if (!empId || !otDate) {
+    document.getElementById("weeklyLeft").value = "";
+    document.getElementById("monthlyLeft").value = "";
+    submitBtn.classList.add("btn-disabled")
+    submitBtn.title = "Select employee and date";
+    // reset styles
+    submitBtn.style.backgroundColor = "";
+    submitBtn.style.color = "";
+    submitBtn.style.cursor = "";
+    return;
+  }
+
+  try {
+    const weeklyUsed = await checkWeeklyOTLimit(empId, otDate);
+    const monthlyUsed = await checkMonthlyOTLimit(empId, otDate);
+
+    const WEEKLY_LIMIT = 12;
+    const MONTHLY_LIMIT = 48;
+
+    const weeklyLeft = Math.max(0, WEEKLY_LIMIT - weeklyUsed);
+    const monthlyLeft = Math.max(0, MONTHLY_LIMIT - monthlyUsed);
+
+    document.getElementById("weeklyLeft").value =
+      weeklyLeft.toFixed(2) + " hrs";
+
+    document.getElementById("monthlyLeft").value =
+      monthlyLeft.toFixed(2) + " hrs";
+
+     const weeklyInput = document.getElementById("weeklyLeft");
+const monthlyInput = document.getElementById("monthlyLeft");
+
+if (weeklyLeft <= 0 || monthlyLeft <= 0) {
+  // restart animation
+  weeklyInput.classList.remove("ot-limit-field");
+  monthlyInput.classList.remove("ot-limit-field");
+
+  void weeklyInput.offsetWidth;
+  void monthlyInput.offsetWidth;
+
+  weeklyInput.classList.add("ot-limit-field");
+  monthlyInput.classList.add("ot-limit-field");
+} else {
+  weeklyInput.classList.remove("ot-limit-field");
+  monthlyInput.classList.remove("ot-limit-field");
+}
+
+    // 🔑 FINAL DECISION (single place)
+    if (weeklyLeft <= 0 || monthlyLeft <= 0) {
+      submitBtn.classList.add("btn-disabled")
+      submitBtn.title = "OT limit reached";
+
+      submitBtn.style.backgroundColor = "#b0b0b0";
+      submitBtn.style.color = "#666";
+      submitBtn.style.cursor = "not-allowed";
+    } else {
+      submitBtn.disabled = false;
+      submitBtn.title = "";
+      // 🔑 RESET styles
+      submitBtn.style.backgroundColor = "";
+      submitBtn.style.color = "";
+      submitBtn.style.cursor = "";
+    }
+  } catch (err) {
+    console.error("OT calculation error", err);
+  }
+}
+
+/* =========================
+   CALCULATE OT LEFT ON DATE CHANGE
+========================= */
+document.getElementById("date").addEventListener("change", () => {
+  const dateValue = document.getElementById("date").value;
+
+  // Check month
+  const currentMonth = isCurrentMonth(dateValue);
+
+  // Enable / Disable form
+  toggleFormForMonth(currentMonth);
+
+  // If current month → calculate OT
+  if (currentMonth && empIdSelect.value) {
+    calculateOTLeft();
+  } else {
+    // Clear OT values
+    document.getElementById("weeklyLeft").value = "";
+    document.getElementById("monthlyLeft").value = "";
+  }
+});
+
+/* =========================
+   SUBMIT OT FORM
+========================= */
+
+otForm.addEventListener("submit", async function (e) {
+  if (!otForm.checkValidity()) {
+    otForm.reportValidity();   // Shows red highlight + message
+    return;                    // Stop submission
+  }
+
+  e.preventDefault();
+  const dateValue = document.getElementById("date").value;
+
+if (!isCurrentMonth(dateValue)) {
+  alert("❌ OT allowed only for current month");
+  return;
+}
+
+
+  const timeValue = document.getElementById("hours").value;
+  let otHoursDecimal;
+
+  try {
+    otHoursDecimal = timeToDecimal(timeValue);
+  } catch {
+    return;
+  }
+
+  const empId = empIdSelect.value;
+  const otDate = document.getElementById("date").value;
+
+  // 🔴 CHECK MONTHLY LIMIT FIRST
+  let monthlyTotal;
+  try {
+    monthlyTotal = await checkMonthlyOTLimit(empId, otDate);
+  } catch {
+    return;
+  }
+
+  if (monthlyTotal >= 48) {
+    alert("❌ Monthly OT limit (48 hrs) reached. OT not allowed.");
+    return; // STOP SUBMISSION
+  }
+
+  const data = {
+    empId,
+    otDate,
+    shift: document.getElementById("shift").value,
+    otHours: otHoursDecimal,
+    givenBy: document.getElementById("givenBy").value,
+    reason: document.getElementById("reason").value
+  };
+  try {
+    const res = await fetch("/api/ot", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data)
+    });
+    const result = await res.json();
+    if (res.ok) {
+      alert("OT saved successfully ✅");    
+   // ✅ Reset ONLY fields user entered
+  empIdSelect.value = "";
+  employeeInput.value = "";
+  document.getElementById("date").value = "";
+  document.getElementById("shift").value = "";
+  document.getElementById("hours").value = "";
+  document.getElementById("reason").value = "";
+
+  // ✅ Clear OT info
+  document.getElementById("weeklyLeft").value = "";
+  document.getElementById("monthlyLeft").value = "";
+  // ✅ Remove warning styles
+
+  document.getElementById("weeklyLeft").classList.remove("ot-limit-field");
+  document.getElementById("monthlyLeft").classList.remove("ot-limit-field");
+
+  // ✅ Reload employees for same department
+  departmentSelect.dispatchEvent(new Event("change"));
+} else {
+      alert(result.message || "Failed to save OT");
+    }
+
+  } catch (err) {
+    console.error("OT submit error", err);
+    alert("Server error");
+  }
+});
+
+
+
+  // Your JavaScript code here
+  fetch("/login/logged-user")
+    .then(res => res.json())
+    .then(user => {
+      if (user.department !== "HR") {
+        const hrLink = document.getElementById("hrLink");
+        if (hrLink) {
+          hrLink.style.pointerEvents = "none";
+          hrLink.style.opacity = "0.5";
+          hrLink.style.cursor = "not-allowed";
+          hrLink.title = "HR only";
+        }
+      }
+    });
+</script>
+</body>
+</html>

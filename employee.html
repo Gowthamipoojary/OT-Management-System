@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Employee Management</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="container">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <h2>OT System</h2>
+    <a href="index">OT Entry</a>
+    <a href="employee" class="active">Employee Management</a>
+    <a href="otsummary">OT Summary</a>
+    <a href="monthlysummary">Weekly/Monthly Summary</a>
+    <a href="hraproval" id="hrLink">HR Approval</a>
+  </div>
+  <!-- MAIN -->
+  <div class="main">
+    <div class="header">
+      <h1>Employee Management</h1>
+    </div>
+    <div class="card">
+      <form class="employee-form">
+        <!-- ADD EMPLOYEE -->
+        <h3>Add Employee</h3>
+<div class="form-group">
+  <label>Employee ID</label>
+  <input
+    type="text"
+    id="empId"
+    placeholder="Enter employee ID"
+    required
+  >
+</div>
+        <div class="form-group">
+          <label>Employee Name</label>
+          <input
+  type="text"
+  id="empName"
+  placeholder="Enter employee name"
+  pattern="^[A-Za-z ]+$"
+  title="Only letters and spaces allowed"
+  oninput="this.value = this.value.replace(/[^A-Za-z ]/g, '')"
+  required
+>
+       </div>
+        <div class="form-group">
+          <label>Department</label>
+          <select id="addDept" required>
+            <option value="">Select Department</option>
+          </select>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit">Add Employee</button>
+        </div>
+        <hr>
+        <!-- DELETE EMPLOYEE -->
+        <h3>Delete Employee</h3>
+        <div class="form-group">
+          <label>Select Department</label>
+          <select id="deleteDept">
+            <option value="">Select Department</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+  <label>Select Employee ID</label>
+  <select id="deleteEmpId">
+    <option value="">Select Employee ID</option>
+  </select>
+</div>
+
+<div class="form-group">
+  <label>Employee Name</label>
+  <input
+    type="text"
+    id="deleteEmpName"
+    placeholder="Employee name will auto fill"
+    readonly
+  >
+</div>
+        <div class="form-actions">
+          <button
+            type="button"
+            class="btn-danger"
+            id="deleteBtn"
+          >
+            Delete Employee
+          </button>
+        </div>
+
+      </form>
+    </div>
+  </div>
+</div>
+<script>
+const addDept = document.getElementById("addDept");
+const deleteDept = document.getElementById("deleteDept");
+const deleteEmpId = document.getElementById("deleteEmpId");
+const deleteEmpName = document.getElementById("deleteEmpName");
+const empForm = document.querySelector(".employee-form");
+const deleteBtn = document.getElementById("deleteBtn");
+
+/* =========================
+   AUTH CHECK
+========================= */
+function checkAuth() {
+  const password = prompt("Enter Admin Password");
+
+  if (password !== "admin123") {   // change password if needed
+    alert("Unauthorized action!");
+    return false;
+  }
+  return true;
+}
+/* =========================
+   LOAD DEPARTMENTS
+========================= */
+async function loadDepartments() {
+  try {
+    const res = await fetch("/api/departments");
+    const departments = await res.json();
+
+    departments.forEach(dept => {
+      addDept.add(new Option(dept.DeptName, dept.DeptID));
+      deleteDept.add(new Option(dept.DeptName, dept.DeptID));
+    });
+  } catch (err) {
+    console.error("Error loading departments", err);
+    alert("Failed to load departments");
+  }
+}
+loadDepartments();
+/* =========================
+   LOAD EMPLOYEES FOR DELETE
+========================= */
+deleteDept.addEventListener("change", async function () {
+  deleteEmpId.innerHTML = '<option value="">Select Employee ID</option>';
+  deleteEmpName.value = "";
+
+  if (!this.value) return;
+
+  const res = await fetch(`/api/employee/${this.value}`);
+  const employees = await res.json();
+
+  employees.forEach(emp => {
+    const option = document.createElement("option");
+    option.value = emp.EmpID;          // Employee ID
+    option.textContent = emp.EmpID;    // show ID
+    option.dataset.name = emp.EmpName; // store name
+    deleteEmpId.appendChild(option);
+  });
+});
+
+deleteEmpId.addEventListener("change", function () {
+  const selectedOption = this.options[this.selectedIndex];
+  deleteEmpName.value = selectedOption?.dataset.name || "";
+});
+
+/* =========================
+   ADD EMPLOYEE (PROTECTED)
+========================= */
+empForm.addEventListener("submit", async function (e) {
+  e.preventDefault();
+  if (!checkAuth()) return;   // 🔐 AUTH CHECK
+  const empId = document.getElementById("empId").value.trim();
+  const empName = document.getElementById("empName").value.trim();
+  const deptId = addDept.value;
+  if (!empId || !empName || !deptId) {
+  alert("All fields are required");
+  return;
+}
+  const res = await fetch("/api/employee", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ empId, empName, deptId })
+  });
+  const result = await res.json();
+  alert(result.message);
+  empForm.reset();
+});
+/* =========================
+   DELETE EMPLOYEE (PROTECTED)
+========================= */
+deleteBtn.addEventListener("click", async function () {
+  if (!checkAuth()) return;   // 🔐 AUTH CHECK
+  if (!deleteEmpId.value) {
+  alert("Select employee to delete");
+  return;
+}
+
+const res = await fetch(`/api/employee/${deleteEmpId.value}`, {
+  method: "PUT"
+});
+  const result = await res.json();
+  alert(result.message);
+  
+  // Reset dropdowns
+deleteDept.value = "";
+deleteEmpId.innerHTML = '<option value="">Select Employee ID</option>';
+deleteEmpName.value = "";
+});
+
+
+
+fetch("/current-user")
+  .then(res => res.json())
+  .then(user => {
+    if (user.department !== "HR") {
+      const hrLink = document.getElementById("hrLink");
+      if (hrLink) {
+        hrLink.style.pointerEvents = "none";
+        hrLink.style.opacity = "0.5";
+        hrLink.style.cursor = "not-allowed";
+        hrLink.title = "HR access only";
+      }
+    }
+  })
+  .catch(() => {
+    window.location.href = "/login";
+  });
+
+
+</script>
+</body>
+</html>
