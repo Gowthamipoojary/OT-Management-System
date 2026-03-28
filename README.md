@@ -1,4 +1,5 @@
 ⏱️ OT Management System
+
 📌 Project Description
 
 The OT Management System is a full-stack web application developed to manage and monitor employee overtime in an organization. In many companies, overtime is still tracked manually using spreadsheets or paper records, which can lead to errors, lack of transparency, and difficulty in enforcing company policies. This project was designed to solve those problems by providing a centralized and automated system for handling overtime data.
